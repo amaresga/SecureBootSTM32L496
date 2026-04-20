@@ -1,0 +1,47 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Debug",
+            "type": "shell",
+            "command": "powershell -ExecutionPolicy Bypass -File ${workspaceFolder}/build.ps1 -Config Debug",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build Release",
+            "type": "shell",
+            "command": "powershell -ExecutionPolicy Bypass -File ${workspaceFolder}/build.ps1 -Config Release",
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Flash Debug",
+            "type": "shell",
+            "command": "powershell -ExecutionPolicy Bypass -File ${workspaceFolder}/flash.ps1 -Config Debug",
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Flash Release",
+            "type": "shell",
+            "command": "powershell -ExecutionPolicy Bypass -File ${workspaceFolder}/flash.ps1 -Config Release",
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build & Flash Debug",
+            "type": "shell",
+            "command": "powershell -ExecutionPolicy Bypass -File ${workspaceFolder}/build.ps1 -Config Debug ; powershell -ExecutionPolicy Bypass -File ${workspaceFolder}/flash.ps1 -Config Debug",
+            "group": "none",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "Remove-Item -Recurse -Force ${workspaceFolder}/build -ErrorAction SilentlyContinue",
+            "group": "none",
+            "problemMatcher": []
+        }
+    ]
+}

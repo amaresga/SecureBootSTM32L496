@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "STM32L496",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/include/cmsis"
+            ],
+            "defines": [
+                "STM32L496xx",
+                "__FPU_USED=1",
+                "__FPU_PRESENT=1",
+                "ARM_MATH_CM4"
+            ],
+            "compilerPath": "arm-none-eabi-gcc",
+            "cStandard": "c11",
+            "intelliSenseMode": "gcc-arm",
+            "forcedInclude": []
+        }
+    ],
+    "version": 4
+}
