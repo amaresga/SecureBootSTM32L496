@@ -59,6 +59,45 @@ typedef struct {
 #define SysTick  ((SysTick_Type *) SysTick_BASE)  /**< SysTick peripheral */
 #define NVIC     ((NVIC_Type *)    NVIC_BASE)      /**< NVIC peripheral */
 
+// SCB
+#define SCB_BASE  (SCS_BASE + 0x0D00UL)
+#define SCB       ((SCB_Type *) SCB_BASE)  /**< System Control Block */
+
+/*
+ * @brief System Control Block (SCB) register map (ARM DDI0403E §B3.2).
+ */
+typedef struct {
+  volatile uint32_t CPUID;       /**< 0x000 CPU ID base */
+  volatile uint32_t ICSR;        /**< 0x004 Interrupt Control and State */
+  volatile uint32_t VTOR;        /**< 0x008 Vector Table Offset */
+  volatile uint32_t AIRCR;       /**< 0x00C Application Interrupt and Reset Control */
+  volatile uint32_t SCR;         /**< 0x010 System Control */
+  volatile uint32_t CCR;         /**< 0x014 Configuration and Control */
+  volatile uint8_t  SHPR[12];    /**< 0x018 System Handler Priority (bytes per handler) */
+  volatile uint32_t SHCSR;       /**< 0x024 System Handler Control and State */
+  volatile uint32_t CFSR;        /**< 0x028 Configurable Fault Status (MMFSR+BFSR+UFSR) */
+  volatile uint32_t HFSR;        /**< 0x02C HardFault Status */
+  volatile uint32_t DFSR;        /**< 0x030 Debug Fault Status */
+  volatile uint32_t MMFAR;       /**< 0x034 MemManage Fault Address */
+  volatile uint32_t BFAR;        /**< 0x038 BusFault Address */
+  volatile uint32_t AFSR;        /**< 0x03C Auxiliary Fault Status */
+           uint32_t RESERVED[18];
+  volatile uint32_t CPACR;       /**< 0x088 Coprocessor Access Control */
+} SCB_Type;
+
+// SCB AIRCR — application interrupt and reset control
+#define SCB_AIRCR_VECTKEY_Val      (0x05FAUL << 16U)  /**< Write key — upper half must be 0x05FA */
+#define SCB_AIRCR_SYSRESETREQ_Msk  (1UL << 2U)        /**< System reset request */
+
+// SCB SHCSR — fault exception enables
+#define SCB_SHCSR_USGFAULTENA_Msk  (1UL << 18U)  /**< UsageFault enable */
+#define SCB_SHCSR_BUSFAULTENA_Msk  (1UL << 17U)  /**< BusFault enable */
+#define SCB_SHCSR_MEMFAULTENA_Msk  (1UL << 16U)  /**< MemManage fault enable */
+
+// SCB CCR — configuration and control
+#define SCB_CCR_DIV_0_TRP_Msk    (1UL << 4U)  /**< Divide-by-zero generates UsageFault */
+#define SCB_CCR_UNALIGN_TRP_Msk  (1UL << 3U)  /**< Unaligned access generates UsageFault */
+
 //===----------------------------------------------------------------------===//
 // Reset and Clock Control (RCC)
 //===----------------------------------------------------------------------===//
@@ -187,6 +226,36 @@ typedef struct {
 #define FLASH_ACR_DCEN_Pos     10U
 #define FLASH_ACR_DCEN_Msk     (1UL << FLASH_ACR_DCEN_Pos)       /**< Data cache enable */
 
+// Flash OPTR — read-out protection level
+#define FLASH_OPTR_RDP_Pos     0U
+#define FLASH_OPTR_RDP_Msk     (0xFFUL << FLASH_OPTR_RDP_Pos)  /**< RDP byte */
+#define FLASH_OPTR_RDP_LEVEL0  0xAAUL  /**< Level 0: no protection, debug fully open */
+#define FLASH_OPTR_RDP_LEVEL2  0xCCUL  /**< Level 2: permanent maximum protection */
+
+//===----------------------------------------------------------------------===//
+// Independent Watchdog (IWDG)
+//===----------------------------------------------------------------------===//
+
+/*
+ * @brief IWDG register map (RM0351 §32.4).
+ */
+typedef struct {
+  volatile uint32_t KR;    /**< Key register (write-only) */
+  volatile uint32_t PR;    /**< Prescaler register */
+  volatile uint32_t RLR;   /**< Reload register */
+  volatile uint32_t SR;    /**< Status register (read-only) */
+  volatile uint32_t WINR;  /**< Window register */
+} IWDG_Type;
+
+// IWDG KR — key values
+#define IWDG_KR_RELOAD  0xAAAAUL  /**< Reload counter (pet the watchdog) */
+#define IWDG_KR_UNLOCK  0x5555UL  /**< Unlock PR and RLR for write access */
+#define IWDG_KR_START   0xCCCCUL  /**< Start the watchdog */
+
+// IWDG SR — status bits
+#define IWDG_SR_PVU_Msk  (1UL << 0U)  /**< Prescaler value update in progress */
+#define IWDG_SR_RVU_Msk  (1UL << 1U)  /**< Reload value update in progress */
+
 //===----------------------------------------------------------------------===//
 // Power control (PWR)
 //===----------------------------------------------------------------------===//
@@ -246,6 +315,7 @@ typedef struct {
 #define GPIOC_BASE   (AHB2PERIPH_BASE + 0x0800UL)
 #define RCC_BASE     (AHB1PERIPH_BASE + 0x1000UL)
 #define FLASH_BASE_  (AHB1PERIPH_BASE + 0x2000UL)
+#define IWDG_BASE    (APB1PERIPH_BASE + 0x3000UL)
 #define PWR_BASE     (APB1PERIPH_BASE + 0x7000UL)
 
 #define GPIOA   ((GPIO_TypeDef *)  GPIOA_BASE)  /**< GPIOA peripheral */
@@ -253,6 +323,7 @@ typedef struct {
 #define GPIOC   ((GPIO_TypeDef *)  GPIOC_BASE)  /**< GPIOC peripheral */
 #define RCC     ((RCC_TypeDef *)   RCC_BASE)    /**< RCC peripheral */
 #define FLASH_  ((FLASH_TypeDef *) FLASH_BASE_) /**< Flash interface peripheral */
+#define IWDG    ((IWDG_Type *)     IWDG_BASE)   /**< Independent watchdog */
 #define PWR     ((PWR_TypeDef *)   PWR_BASE)    /**< PWR peripheral */
 
 #endif // STM32L496XX_H

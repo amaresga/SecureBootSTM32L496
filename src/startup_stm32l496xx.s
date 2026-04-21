@@ -11,6 +11,7 @@
 
 /* Stack pointer value defined in linker script */
     .global _estack
+    .global _sstack
 
 /* External symbols provided by linker script */
     .global _sidata
@@ -152,6 +153,31 @@ g_pfnVectors:
 Reset_Handler:
     /* Set stack pointer explicitly (required for some debug scenarios) */
     ldr   sp, =_estack
+
+    /* ---------------------------------------------------------------
+     * Security scrub: zero all of SRAM1 before any C data is placed.
+     * Prevents residual secrets from a previous execution from leaking
+     * into uninitialised variables or heap memory.
+     * SRAM1: 0x20000000 – _estack (256 KB).  Safe to zero now because
+     * no local variables have been pushed to the stack yet.
+     * --------------------------------------------------------------- */
+    ldr   r0, =0x20000000
+    ldr   r1, =_estack
+    movs  r2, #0
+ScrubSRAM:
+    str   r2, [r0], #4
+    cmp   r0, r1
+    bcc   ScrubSRAM
+
+    /* ---------------------------------------------------------------
+     * Stack sentinel: write a known pattern at the bottom of the
+     * reserved stack region.  boot_init() validates this value before
+     * configuring clocks — a corrupt sentinel indicates overflow or
+     * tampering before the first C instruction executed.
+     * --------------------------------------------------------------- */
+    ldr   r0, =_sstack
+    ldr   r1, =0xDEADC0DE
+    str   r1, [r0]
 
     /* Copy initialised data from Flash (.sidata) to RAM (.data) */
     movs  r1, #0

@@ -2,7 +2,8 @@
 
 ENTRY(Reset_Handler)
 
-_estack = ORIGIN(RAM) + LENGTH(RAM);   /* Top of SRAM1 */
+_estack = ORIGIN(RAM) + LENGTH(RAM);   /* Top of SRAM1 — initial stack pointer */
+_sstack = _estack - _Min_Stack_Size;   /* Bottom of reserved stack region — sentinel address */
 
 _Min_Heap_Size  = 0x400;   /* 1 KB  */
 _Min_Stack_Size = 0x800;   /* 2 KB  */

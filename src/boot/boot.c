@@ -1,5 +1,5 @@
 /// @file boot.c
-/// @brief Boot-stage clock and SysTick initialisation for STM32L496xx.
+/// @brief Boot-stage security init, clock tree, and SysTick for STM32L496xx.
 
 #include "boot.h"
 #include "cmsis/stm32l496xx.h"
@@ -18,6 +18,25 @@ uint32_t boot_get_tick(void) {
 //===----------------------------------------------------------------------===//
 // Internal helpers
 //===----------------------------------------------------------------------===//
+
+// Start the Independent Watchdog with ~2 s timeout.
+// Prescaler ÷64 (PR=4), reload 999: (64 × 1000) / 32 kHz = 2.000 s.
+// Once started, IWDG cannot be stopped in normal run mode.
+static void iwdg_init(void) {
+  IWDG->KR  = IWDG_KR_UNLOCK;
+  IWDG->PR  = 4U;    // ÷64
+  IWDG->RLR = 999U;
+  while (IWDG->SR & (IWDG_SR_PVU_Msk | IWDG_SR_RVU_Msk)) {}
+  IWDG->KR  = IWDG_KR_RELOAD;
+  IWDG->KR  = IWDG_KR_START;
+}
+
+// Validate the stack sentinel written by startup assembly before .data/.bss
+// init.  Returns 0 if intact, -1 if missing (overflow or tampering).
+static int check_stack_sentinel(void) {
+  extern uint32_t _sstack;
+  return (*(volatile uint32_t *)(&_sstack) == 0xDEADC0DEUL) ? 0 : -1;
+}
 
 static void set_flash_latency(uint32_t latency) {
   uint32_t acr = FLASH_->ACR;
@@ -74,8 +93,30 @@ static void configure_pll_80mhz(void) {
 // Public API
 //===----------------------------------------------------------------------===//
 
+void boot_kick_watchdog(void) {
+  IWDG->KR = IWDG_KR_RELOAD;
+}
+
+uint8_t boot_get_rdp_level(void) {
+  uint32_t rdp = FLASH_->OPTR & FLASH_OPTR_RDP_Msk;
+  if (rdp == FLASH_OPTR_RDP_LEVEL0) return 0U;
+  if (rdp == FLASH_OPTR_RDP_LEVEL2) return 2U;
+  return 1U;
+}
+
 int boot_init(void) {
-  // 1. Ensure MSI is running and stable at 4 MHz (MSIRANGE = 6)
+  // 1. Arm the independent watchdog immediately — catches any hang that
+  //    follows, including in the clock-switch sequence.
+  iwdg_init();
+
+  // 2. Verify the stack sentinel written by startup assembly.
+  //    A missing sentinel means either the stack overflowed before the
+  //    first C instruction or the startup code was bypassed.
+  if (check_stack_sentinel() != 0) {
+    return BOOT_ERR_STACK_CORRUPT;
+  }
+
+  // 3. Ensure MSI is running and stable at 4 MHz (MSIRANGE = 6)
   RCC->CR |= RCC_CR_MSION_Msk;
   while (!(RCC->CR & RCC_CR_MSIRDY_Msk)) {
     // spin
@@ -96,16 +137,16 @@ int boot_init(void) {
     // spin
   }
 
-  // 2. Raise CPU voltage to Range 1 (required for frequencies above 26 MHz)
+  // 4. Raise CPU voltage to Range 1 (required for frequencies above 26 MHz)
   set_voltage_range1();
 
-  // 3. Set Flash latency to 4 WS (required at 80 MHz, VOS Range 1, 3.3 V)
+  // 5. Set Flash latency to 4 WS (required at 80 MHz, VOS Range 1, 3.3 V)
   set_flash_latency(4U);
 
-  // 4. Configure and start the PLL → 80 MHz
+  // 6. Configure and start the PLL → 80 MHz
   configure_pll_80mhz();
 
-  // 5. Select PLL as SYSCLK
+  // 7. Select PLL as SYSCLK
   uint32_t cfgr = RCC->CFGR;
   cfgr &= ~RCC_CFGR_SW_Msk;
   cfgr |= (3UL << RCC_CFGR_SW_Pos); // SW = 0b11 → PLL
@@ -114,12 +155,12 @@ int boot_init(void) {
     // spin
   }
 
-  // 6. Configure SysTick: 80 000 ticks at 80 MHz = exactly 1 ms period
+  // 8. Configure SysTick: 80 000 ticks at 80 MHz = exactly 1 ms period
   SysTick->LOAD = 80000U - 1U;
   SysTick->VAL  = 0U;
   SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk  // processor clock source
                 | SysTick_CTRL_TICKINT_Msk     // generate exception on reload
                 | SysTick_CTRL_ENABLE_Msk;     // start counter
 
-  return 0;
+  return BOOT_OK;
 }

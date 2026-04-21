@@ -57,7 +57,9 @@ int main(void) {
   for (;;) {
     led_on();
     delay_ms(BLINK_HALF);
+    boot_kick_watchdog();
     led_off();
     delay_ms(BLINK_HALF);
+    boot_kick_watchdog();
   }
 }

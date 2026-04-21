@@ -44,6 +44,7 @@ add_link_options(
 set(SOURCES
     src/startup_stm32l496xx.s
     src/boot/boot.c
+    src/boot/fault.c
     src/main.c
     src/system_stm32l4xx.c
 )
