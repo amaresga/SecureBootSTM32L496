@@ -1,10 +1,13 @@
 #!/usr/bin/env pwsh
 # build.ps1 — Configure and build the project
-# Usage: .\build.ps1 [-Config Debug|Release]
+# Usage: .\build.ps1 [-Config Debug|Release] [-Clean]
+#   -Config  Build configuration (default: Debug)
+#   -Clean   Delete the build directory before configuring
 
 param(
     [ValidateSet('Debug','Release')]
-    [string]$Config = 'Debug'
+    [string]$Config = 'Debug',
+    [switch]$Clean
 )
 
 Set-StrictMode -Version Latest
@@ -20,6 +23,12 @@ if (Test-Path $ArmToolchain) {
 
 $Root     = $PSScriptRoot
 $BuildDir = "$Root\build"   # shared for all configs (Ninja Multi-Config)
+
+if ($Clean -and (Test-Path $BuildDir)) {
+    Write-Host "==> Cleaning $BuildDir..." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force $BuildDir
+    Write-Host "==> Clean complete." -ForegroundColor Green
+}
 
 Write-Host "==> Configuring ($Config)..." -ForegroundColor Cyan
 cmake -S $Root -B $BuildDir -G "Ninja Multi-Config"

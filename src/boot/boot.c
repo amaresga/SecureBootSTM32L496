@@ -22,20 +22,29 @@ uint32_t boot_get_tick(void) {
 // Start the Independent Watchdog with ~2 s timeout.
 // Prescaler ÷64 (PR=4), reload 999: (64 × 1000) / 32 kHz = 2.000 s.
 // Once started, IWDG cannot be stopped in normal run mode.
+// Sequence per RM0351 §32.3.2:
+//   1. START (0xCCCC) — enables LSI and activates IWDG
+//   2. UNLOCK (0x5555) — allows writes to PR and RLR
+//   3. Write PR and RLR
+//   4. Wait for SR to clear (update complete)
+//   5. RELOAD (0xAAAA) — load the new value before the first timeout
 static void iwdg_init(void) {
-  IWDG->KR  = IWDG_KR_UNLOCK;
-  IWDG->PR  = 4U;    // ÷64
-  IWDG->RLR = 999U;
+  IWDG->KR  = IWDG_KR_START;   // start IWDG + enable LSI
+  IWDG->KR  = IWDG_KR_UNLOCK;  // unlock PR and RLR for write
+  IWDG->PR  = 4U;               // prescaler ÷64
+  IWDG->RLR = 999U;             // reload = 999 → ~2 s timeout
   while (IWDG->SR & (IWDG_SR_PVU_Msk | IWDG_SR_RVU_Msk)) {}
-  IWDG->KR  = IWDG_KR_RELOAD;
-  IWDG->KR  = IWDG_KR_START;
+  IWDG->KR  = IWDG_KR_RELOAD;  // refresh counter with new reload value
 }
 
 // Validate the stack sentinel written by startup assembly before .data/.bss
 // init.  Returns 0 if intact, -1 if missing (overflow or tampering).
 static int check_stack_sentinel(void) {
-  extern uint32_t _sstack;
-  return (*(volatile uint32_t *)(&_sstack) == 0xDEADC0DEUL) ? 0 : -1;
+  // _sstack is a linker-defined absolute symbol: its *value* is the address
+  // of the sentinel word.  We must use the symbol as a pointer, not take its
+  // address — extern uint32_t[] is the idiomatic way to do this in C.
+  extern uint32_t _sstack[];
+  return (*(volatile uint32_t *)_sstack == 0xDEADC0DEUL) ? 0 : -1;
 }
 
 static void set_flash_latency(uint32_t latency) {
