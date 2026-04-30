@@ -1,10 +1,14 @@
 #!/usr/bin/env pwsh
-# flash.ps1 — Flash the built ELF onto the board via STM32CubeProgrammer CLI
-# Usage: .\flash.ps1 [-Config Debug|Release] [-Port SWD|JTAG] [-Freq 4000]
+# flash.ps1 — Flash bootloader and/or application onto the board
+# Usage: .\flash.ps1 [-Config Debug|Release] [-Target bootloader|app|all] [-Port SWD|JTAG] [-Freq 4000]
+#   -Target  Which image to flash (default: all)
 
 param(
     [ValidateSet('Debug','Release')]
     [string]$Config = 'Debug',
+
+    [ValidateSet('bootloader','app','all')]
+    [string]$Target = 'all',
 
     [ValidateSet('SWD','JTAG')]
     [string]$Port = 'SWD',
@@ -29,30 +33,52 @@ foreach ($candidate in $CubeProgCandidates) {
 }
 
 $Root       = $PSScriptRoot
-$ElfFile    = "$Root\build\$Config\STM32L496_Boot.elf"
 $Programmer = "STM32_Programmer_CLI.exe"
+
+# Map target to flash image.
+# Bootloader: ELF (no post-build patching needed).
+# App:        HEX (patch_image.py patches length+CRC into .bin then regenerates .hex;
+#             the .elf still has the unpatched zeros and must NOT be flashed directly).
+$imageMap = @{
+    'bootloader' = "$Root\build\bootloader\$Config\Bootloader.elf"
+    'app'        = "$Root\build\app\$Config\App.hex"
+}
+$targets = if ($Target -eq 'all') { @('bootloader', 'app') } else { @($Target) }
 
 # Verify the programmer is reachable
 if (-not (Get-Command $Programmer -ErrorAction SilentlyContinue)) {
     Write-Error "'$Programmer' not found on PATH. Add STM32CubeProgrammer\bin to your PATH."
 }
 
-# Verify the build output exists
-if (-not (Test-Path $ElfFile)) {
-    Write-Error "ELF not found: $ElfFile`nRun .\build.ps1 -Config $Config first."
+# Verify all requested image files exist before touching the board
+foreach ($t in $targets) {
+    $img = $imageMap[$t]
+    if (-not (Test-Path $img)) {
+        Write-Error "Image not found: $img`nRun .\build.ps1 -Config $Config -Target $t first."
+    }
 }
 
-Write-Host "==> Connecting via $Port @ $Freq kHz..." -ForegroundColor Cyan
-Write-Host "    ELF : $ElfFile" -ForegroundColor Gray
+# Flash each target in order (bootloader first, then app)
+foreach ($t in $targets) {
+    $img = $imageMap[$t]
+    Write-Host "==> Flashing $t ($Config) via $Port @ $Freq kHz..." -ForegroundColor Cyan
+    Write-Host "    Image: $img" -ForegroundColor Gray
 
-# -c  : connect   (port, frequency, reset=HWrst for a clean connect)
-# -w  : write ELF/HEX/BIN to target
-# -v  : verify after write
-# -rst: reset and run after flashing
-& $Programmer -c port=$Port freq=$Freq reset=HWrst -w $ElfFile -v -rst
+    # -c  : connect   (port, frequency, reset=HWrst for a clean connect)
+    # -w  : write image to target
+    # -v  : verify after write
+    # Only reset and run after the last image is flashed
+    $isLast = ($t -eq $targets[-1])
+    if ($isLast) {
+        & $Programmer -c port=$Port freq=$Freq reset=HWrst -w $img -v -rst
+    } else {
+        & $Programmer -c port=$Port freq=$Freq reset=HWrst -w $img -v
+    }
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "STM32_Programmer_CLI exited with code $LASTEXITCODE"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "STM32_Programmer_CLI exited with code $LASTEXITCODE while flashing $t"
+    }
+    Write-Host "    Done." -ForegroundColor Green
 }
 
 Write-Host "==> Flash complete. Board is running." -ForegroundColor Green
