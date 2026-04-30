@@ -3,11 +3,16 @@
 
 set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/../ld/bootloader.ld)
 
+# Ed25519 verification library (Monocypher, downloaded at configure time)
+add_subdirectory(${CMAKE_SOURCE_DIR}/shared/crypto ${CMAKE_BINARY_DIR}/shared/crypto)
+
 set(BOOTLOADER_SOURCES
     src/startup_stm32l496xx.s
     src/system_stm32l4xx.c
     src/boot/boot.c
     src/boot/fault.c
+    src/boot/pubkey.c
+    src/boot/verify.c
     src/main.c
 )
 
@@ -37,7 +42,10 @@ target_link_options(Bootloader.elf PRIVATE
 target_include_directories(Bootloader.elf PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/include/cmsis
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/boot   # pubkey.h
 )
+
+target_link_libraries(Bootloader.elf PRIVATE crypto_ed25519)
 
 add_custom_command(TARGET Bootloader.elf POST_BUILD
     COMMAND arm-none-eabi-objcopy -O ihex   $<TARGET_FILE:Bootloader.elf> $<TARGET_FILE_DIR:Bootloader.elf>/Bootloader.hex

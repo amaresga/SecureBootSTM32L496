@@ -24,3 +24,21 @@ build/
 # Windows
 Thumbs.db
 Desktop.ini
+
+# Local secrets — NEVER commit these
+.env
+
+# Signing keys — NEVER commit private keys to the repository
+*.pem
+*.p8
+*.p12
+*.key
+tools/private_key*
+
+# SoftHSM2 token data (lives outside the repo by default; guard against accidents)
+softhsm2.conf
+var/softhsm/
+
+# Vendored Monocypher sources are committed after running setup_crypto.ps1.
+# If you prefer not to commit them, uncomment the line below:
+# shared/crypto/vendor/

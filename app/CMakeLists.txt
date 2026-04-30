@@ -42,20 +42,10 @@ target_include_directories(App.elf PRIVATE
 )
 
 add_custom_command(TARGET App.elf POST_BUILD
-    # 1. Generate raw binary from ELF (address info stripped)
+    # Generate raw binary — all header patching is done by tools/sign_image.py
     COMMAND arm-none-eabi-objcopy -O binary
             $<TARGET_FILE:App.elf>
             $<TARGET_FILE_DIR:App.elf>/App.bin
-    # 2. Patch length and CRC-32 into the image header
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/patch_image.py
-            $<TARGET_FILE_DIR:App.elf>/App.bin
-            0x08080000
-    # 3. Regenerate .hex from the patched binary (restore load address)
-    COMMAND arm-none-eabi-objcopy
-            -I binary -O ihex
-            --change-address 0x08080000
-            $<TARGET_FILE_DIR:App.elf>/App.bin
-            $<TARGET_FILE_DIR:App.elf>/App.hex
     COMMAND arm-none-eabi-size $<TARGET_FILE:App.elf>
-    COMMENT "App: patching image header (length + CRC-32), generating HEX and BIN"
+    COMMENT "App: generating BIN — run tools/sign_image.py to sign before flashing"
 )

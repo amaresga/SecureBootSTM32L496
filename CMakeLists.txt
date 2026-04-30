@@ -17,8 +17,5 @@ set(STM32L496_MCU_FLAGS
     CACHE INTERNAL "Cortex-M4 hard-FP flags"
 )
 
-# Locate Python interpreter (used by app post-build to patch the image header)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
 add_subdirectory(bootloader)
 add_subdirectory(app)
