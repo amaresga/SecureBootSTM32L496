@@ -27,6 +27,14 @@ MEMORY
 
 SECTIONS
 {
+    /* Image header at APP_BASE; padded to 512 B so .isr_vector is VTOR-aligned. */
+    .image_header :
+    {
+        KEEP(*(.image_header))
+        . = ALIGN(512);
+    } >FLASH
+
+    /* Vector table at APP_BASE + 512 = 0x08080200 (VTOR = APP_VTOR_BASE). */
     .isr_vector :
     {
         . = ALIGN(4);

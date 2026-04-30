@@ -2,6 +2,7 @@
 /// @brief Boot-stage security init, clock tree, and SysTick for STM32L496xx.
 
 #include "boot.h"
+#include "image_header.h"
 #include "cmsis/stm32l496xx.h"
 
 // Millisecond counter incremented by SysTick_Handler.
@@ -175,10 +176,10 @@ int boot_init(void) {
 }
 
 void boot_jump_to_app(void) {
-  /* word 0 = initial SP, word 1 = reset vector (Thumb bit set) */
-  const uint32_t *app_hdr = (const uint32_t *)APP_BASE;
-  uint32_t app_sp = app_hdr[0];
-  uint32_t app_pc = app_hdr[1];
+  /* SP and reset vector come from the app's vector table, not the image header. */
+  const uint32_t *app_vtable = (const uint32_t *)APP_VTOR_BASE;
+  uint32_t app_sp = app_vtable[0];
+  uint32_t app_pc = app_vtable[1];
 
   // SP must be within SRAM1 (256 KB at 0x20000000)
   if (app_sp < 0x20000000UL || app_sp > 0x20040000UL) {
@@ -199,8 +200,8 @@ void boot_jump_to_app(void) {
   SysTick->LOAD = 0U;
   SysTick->VAL  = 0U;
 
-  // Relocate the vector table to the application base
-  SCB->VTOR = APP_BASE;
+  // Relocate the vector table to the application vector base
+  SCB->VTOR = APP_VTOR_BASE;
 
   // Load the application's initial stack pointer into MSP
   __asm volatile("msr msp, %0" :: "r"(app_sp) : "memory");
@@ -216,4 +217,49 @@ void boot_jump_to_app(void) {
 
   // Unreachable; belt-and-suspenders infinite loop
   for (;;) {}
+}
+
+//===----------------------------------------------------------------------===//
+// Image integrity
+//===----------------------------------------------------------------------===//
+
+/* CRC-32/ISO-HDLC — reflected poly 0xEDB88320, init/xor 0xFFFFFFFF.
+ * Matches Python binascii.crc32() and tools/patch_image.py. */
+static uint32_t crc32_compute(const uint8_t *data, uint32_t len) {
+  uint32_t crc = 0xFFFFFFFFUL;
+  for (uint32_t i = 0U; i < len; i++) {
+    crc ^= (uint32_t)data[i];
+    for (int b = 0; b < 8; b++) {
+      if (crc & 1U) {
+        crc = (crc >> 1) ^ 0xEDB88320UL;
+      } else {
+        crc >>= 1;
+      }
+    }
+  }
+  return crc ^ 0xFFFFFFFFUL;
+}
+
+int boot_verify_app(void) {
+  const image_header_t *hdr = (const image_header_t *)APP_BASE;
+
+  // 1. Check magic
+  if (hdr->magic != IMAGE_MAGIC) {
+    return BOOT_ERR_APP_INVALID;
+  }
+
+  // 2. Check length is plausible: must cover at least the header fields
+  //    and fit within the app's Flash region
+  if (hdr->length <= 16U || hdr->length > APP_MAX_SIZE) {
+    return BOOT_ERR_APP_INVALID;
+  }
+
+  // 3. Verify CRC-32 over bytes [16..length-1]
+  const uint8_t *image_start = (const uint8_t *)APP_BASE + 16U;
+  uint32_t computed = crc32_compute(image_start, hdr->length - 16U);
+  if (computed != hdr->crc32) {
+    return BOOT_ERR_APP_INVALID;
+  }
+
+  return BOOT_OK;
 }

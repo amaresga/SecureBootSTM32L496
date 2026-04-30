@@ -5,6 +5,7 @@ set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/../ld/app.ld)
 
 set(APP_SOURCES
     src/main.c
+    src/image_header.c
     src/startup_stm32l496xx.s
     src/system_stm32l4xx.c
     # Shared boot infrastructure — referenced from bootloader directory
@@ -41,8 +42,20 @@ target_include_directories(App.elf PRIVATE
 )
 
 add_custom_command(TARGET App.elf POST_BUILD
-    COMMAND arm-none-eabi-objcopy -O ihex   $<TARGET_FILE:App.elf> $<TARGET_FILE_DIR:App.elf>/App.hex
-    COMMAND arm-none-eabi-objcopy -O binary $<TARGET_FILE:App.elf> $<TARGET_FILE_DIR:App.elf>/App.bin
+    # 1. Generate raw binary from ELF (address info stripped)
+    COMMAND arm-none-eabi-objcopy -O binary
+            $<TARGET_FILE:App.elf>
+            $<TARGET_FILE_DIR:App.elf>/App.bin
+    # 2. Patch length and CRC-32 into the image header
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/patch_image.py
+            $<TARGET_FILE_DIR:App.elf>/App.bin
+            0x08080000
+    # 3. Regenerate .hex from the patched binary (restore load address)
+    COMMAND arm-none-eabi-objcopy
+            -I binary -O ihex
+            --change-address 0x08080000
+            $<TARGET_FILE_DIR:App.elf>/App.bin
+            $<TARGET_FILE_DIR:App.elf>/App.hex
     COMMAND arm-none-eabi-size $<TARGET_FILE:App.elf>
-    COMMENT "App: generating HEX, BIN, and size"
+    COMMENT "App: patching image header (length + CRC-32), generating HEX and BIN"
 )

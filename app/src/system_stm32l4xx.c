@@ -13,9 +13,9 @@
 uint32_t SystemCoreClock = 4000000U;
 
 void SystemInit(void) {
-  // 1. Set VTOR to the application Flash base so the vector table cannot be
-  //    redirected by an earlier-stage attacker.
-  SCB->VTOR = 0x08080000UL;
+  // 1. Set VTOR to the application vector table base (APP_BASE + 512 B header).
+  //    The header occupies 0x08080000–0x080801FF; VTOR must be 512-byte aligned.
+  SCB->VTOR = 0x08080200UL;
 
   // 2. Enable configurable fault exceptions so BusFault, UsageFault,
   //    and MemManage are routed to their dedicated handlers instead of

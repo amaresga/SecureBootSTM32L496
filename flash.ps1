@@ -35,10 +35,13 @@ foreach ($candidate in $CubeProgCandidates) {
 $Root       = $PSScriptRoot
 $Programmer = "STM32_Programmer_CLI.exe"
 
-# Map target name to ELF path (Ninja Multi-Config layout: build/<subdir>/<Config>/<name>.elf)
-$elfMap = @{
+# Map target to flash image.
+# Bootloader: ELF (no post-build patching needed).
+# App:        HEX (patch_image.py patches length+CRC into .bin then regenerates .hex;
+#             the .elf still has the unpatched zeros and must NOT be flashed directly).
+$imageMap = @{
     'bootloader' = "$Root\build\bootloader\$Config\Bootloader.elf"
-    'app'        = "$Root\build\app\$Config\App.elf"
+    'app'        = "$Root\build\app\$Config\App.hex"
 }
 $targets = if ($Target -eq 'all') { @('bootloader', 'app') } else { @($Target) }
 
@@ -47,29 +50,29 @@ if (-not (Get-Command $Programmer -ErrorAction SilentlyContinue)) {
     Write-Error "'$Programmer' not found on PATH. Add STM32CubeProgrammer\bin to your PATH."
 }
 
-# Verify all requested ELF files exist before touching the board
+# Verify all requested image files exist before touching the board
 foreach ($t in $targets) {
-    $elf = $elfMap[$t]
-    if (-not (Test-Path $elf)) {
-        Write-Error "ELF not found: $elf`nRun .\build.ps1 -Config $Config -Target $t first."
+    $img = $imageMap[$t]
+    if (-not (Test-Path $img)) {
+        Write-Error "Image not found: $img`nRun .\build.ps1 -Config $Config -Target $t first."
     }
 }
 
 # Flash each target in order (bootloader first, then app)
 foreach ($t in $targets) {
-    $elf = $elfMap[$t]
+    $img = $imageMap[$t]
     Write-Host "==> Flashing $t ($Config) via $Port @ $Freq kHz..." -ForegroundColor Cyan
-    Write-Host "    ELF: $elf" -ForegroundColor Gray
+    Write-Host "    Image: $img" -ForegroundColor Gray
 
     # -c  : connect   (port, frequency, reset=HWrst for a clean connect)
-    # -w  : write ELF to target
+    # -w  : write image to target
     # -v  : verify after write
     # Only reset and run after the last image is flashed
     $isLast = ($t -eq $targets[-1])
     if ($isLast) {
-        & $Programmer -c port=$Port freq=$Freq reset=HWrst -w $elf -v -rst
+        & $Programmer -c port=$Port freq=$Freq reset=HWrst -w $img -v -rst
     } else {
-        & $Programmer -c port=$Port freq=$Freq reset=HWrst -w $elf -v
+        & $Programmer -c port=$Port freq=$Freq reset=HWrst -w $img -v
     }
 
     if ($LASTEXITCODE -ne 0) {

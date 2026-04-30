@@ -11,10 +11,12 @@
 #define BOOT_H
 
 #include <stdint.h>
+#include "image_header.h"
 
 // Boot return codes
 #define BOOT_OK                  0   /**< Boot stage completed successfully */
 #define BOOT_ERR_STACK_CORRUPT  (-1) /**< Stack sentinel absent — possible overflow or tampering */
+#define BOOT_ERR_APP_INVALID    (-2) /**< App header magic, length, or CRC32 check failed */
 
 /*
  * @brief Executes the full boot stage.
@@ -62,18 +64,31 @@ void boot_kick_watchdog(void);
  */
 uint8_t boot_get_rdp_level(void);
 
-/* Application image base address in Flash (Bank 2). */
-#define APP_BASE  0x08080000UL
+/*
+ * @brief Verifies the application image header and CRC-32 integrity.
+ *
+ * Reads the image_header_t at APP_BASE and performs three checks:
+ *  -# Magic word equals IMAGE_MAGIC.
+ *  -# Image length is within (16, APP_MAX_SIZE] bytes.
+ *  -# CRC-32/ISO-HDLC computed over bytes [16..length-1] matches the
+ *     stored crc32 field.
+ *
+ * Must be called before @ref boot_jump_to_app.
+ *
+ * @return BOOT_OK if the image is intact, BOOT_ERR_APP_INVALID otherwise.
+ */
+int boot_verify_app(void);
 
 /*
  * @brief Validates and jumps to the application image.
  *
  * Reads the initial SP and reset vector from the application vector table at
- * @ref APP_BASE, validates both values, then performs a clean hand-off:
+ * @ref APP_VTOR_BASE, validates both values, then performs a clean hand-off:
  *  -# Disables interrupts (CPSID i).
  *  -# Stops and clears SysTick.
- *  -# Relocates VTOR to APP_BASE.
+ *  -# Relocates VTOR to APP_VTOR_BASE.
  *  -# Sets MSP from the application's stored stack pointer.
+ *  -# Re-enables interrupts (CPSIE i).
  *  -# Branches to the application Reset_Handler.
  *
  * If either header word fails range validation the function returns without
